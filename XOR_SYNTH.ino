@@ -5,7 +5,9 @@
 #include <trinityHW.h>
 #include <MozziGuts.h>
 #include <mozzi_midi.h>
+
 #include <mozzi_rand.h>
+
 #include <mozzi_analog.h>
 
 #include <envelope.h>  
