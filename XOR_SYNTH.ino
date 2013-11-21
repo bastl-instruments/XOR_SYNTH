@@ -33,7 +33,7 @@ const char* WAVE_TABLES[]={
 
 #define NUMBER_OF_VOICES 6
 
-#define CONTROL_RATE 64 // powers of 2 please
+#define CONTROL_RATE 128 // powers of 2 please
 /*
 Oscil<SIN2048_NUM_CELLS, AUDIO_RATE> aOsc[NUMBER_OF_VOICES]={
  (SIN2048_DATA)};
@@ -69,8 +69,8 @@ void setup() {
   hw.update();
   hw.update();
   LFO.reset();
-  
   seq.setNumberOfSteps(0);
+  setAllValues(0);
  // checkForPokemon();
 
 }

@@ -2,7 +2,8 @@
 
 #define CONTROL_CHANGE_BITS 7
 #define CONTROL_CHANGE_OFFSET 102
-boolean slave=false;
+#define ARP_VELOCITY 120
+
 
 unsigned char midiSound;
 
@@ -13,7 +14,7 @@ boolean thereIsNoteToPlay;
 #define BUFFER_SIZE 16
 unsigned char midiBuffer[BUFFER_SIZE];
 unsigned char voiceUse[NUMBER_OF_VOICES]={
-  255,255,255};
+  255,255,255,255,255,255};
 
 unsigned char fromBuffer;
 boolean ping;
@@ -53,18 +54,58 @@ unsigned char freeVoice(unsigned char note){
 
 }
 
+boolean pink;
 unsigned char getFreeVoice(unsigned char note){
 
   unsigned char use=255;
+/*
   for(int i=0;i<NUMBER_OF_VOICES;i++){
     if(voiceUse[i]==255) {
       voiceUse[i]=note, use=i;
       break; 
     }
   }
-
   if(use<NUMBER_OF_VOICES) return use;
 
+  */
+     pink=!pink;
+   if(pink){
+   
+   for(int i=0;i<NUMBER_OF_VOICES;i++){
+   if(voiceUse[i]==255) {
+   voiceUse[i]=note, use=i;
+   break; 
+   }
+   }
+   }
+   else{
+   for(int i=NUMBER_OF_VOICES;i>=0;i--){
+   if(voiceUse[i]==255) {
+   voiceUse[i]=note, use=i;
+   break; 
+   }
+   } 
+   }
+   if(use<NUMBER_OF_VOICES) return use;
+   
+
+
+
+}
+void resetBuffer(){
+  for(int i=0;i<BUFFER_SIZE-1;i++) midiBuffer[i]=0;
+  notesInBuffer=0;
+}
+
+void freeAllVoices(){
+  for(int i=0;i<NUMBER_OF_VOICES;i++) voiceUse[i]=255;
+}
+
+void playNotesFromBuffer(){
+  //freeAllVoices();
+  for(int i=0;i<notesInBuffer;i++){
+    if(i<POLYPHONY) proceedNoteOn(midiBuffer[i],ARP_VELOCITY);
+  }
 
 }
 
@@ -133,19 +174,22 @@ void HandleNoteOn(byte channel, byte note, byte velocity) {
       else{
         putNoteIn(note);
         if(arp) orderBuffer();
-        if(isThereNoteToPlay()) {
-          unsigned char _note=noteToPlay();
-          unsigned char voice=getFreeVoice(_note);
-          //  ADSR[voice].noteOff();
-          playSound(sound,voice,_note,velocity);
-        }
-
+        else if(isThereNoteToPlay()) proceedNoteOn(noteToPlay(), velocity);
         //  midiSound=note%6;
-
 
       }
     }
   }
+}
+
+unsigned char proceedNoteOn(unsigned char _note, unsigned char velocity){
+
+  // unsigned char _note=noteToPlay();
+  unsigned char voice=getFreeVoice(_note);
+  //  ADSR[voice].noteOff();
+  playSound(sound,voice,_note,velocity);
+    return voice;
+
 }
 
 void HandleNoteOff(byte channel, byte note, byte velocity){
@@ -161,17 +205,16 @@ void HandleNoteOff(byte channel, byte note, byte velocity){
     }
     else{
       unsigned char outVoice=putNoteOut(note);
+      if(outVoice<NUMBER_OF_VOICES) ADSR[outVoice].noteOff();
+
       if(arp) orderBuffer();
-      if(isThereNoteToPlay()) {
-        unsigned char _note=noteToPlay();
-        unsigned char voice=getFreeVoice(_note);
-        ADSR[outVoice].noteOff();
-        // =getFreeVoice(_note);
-        playSound(sound,voice,_note,velocity);
-      }
-      else{
-        if(outVoice<NUMBER_OF_VOICES) ADSR[outVoice].noteOff();
-      }
+      else if(isThereNoteToPlay()) proceedNoteOn(noteToPlay(), ARP_VELOCITY); 
+      /*
+        else{
+       if(outVoice<NUMBER_OF_VOICES) ADSR[outVoice].noteOff();
+       }
+       */
+
 
       //  if(notesInBuffer==0) for(int i=0;i<NUMBER_OF_VOICES;i++) ADSR[i].noteOff(),voiceUse[i]=255; //pojistka
 
@@ -224,7 +267,8 @@ void HandleStop(){
 }
 
 void sendAllNoteOff(){
- for(int i=0;i<NUMBER_OF_VOICES;i++) ADSR[.noteOff(); 
+  // for(int i=0;i<NUMBER_OF_VOICES;i++) HandleNoteOff(inputChannel,voiceUse[i],0);//ADSR[i].noteOff(); 
+  for(int i=0;i<notesInBuffer;i++) HandleNoteOff(inputChannel,midiBuffer[i],0);
 }
 
 void initMidi(unsigned char _channel){
@@ -240,7 +284,7 @@ void initMidi(unsigned char _channel){
 
   MIDI.setHandleControlChange(HandleControlChange);
   MIDI.setHandleProgramChange(HandleProgramChange);
- // MIDI.setHandleSystemExclusive(HandleSystemExclusive);
+  // MIDI.setHandleSystemExclusive(HandleSystemExclusive);
   MIDI.setHandleSongSelect(HandleSongSelect);
 
   MIDI.setHandleClock(HandleClock);
@@ -267,6 +311,11 @@ void indicateMidiChannel(unsigned char _channel){
   }
 
 }
+
+
+
+
+
 
 
 

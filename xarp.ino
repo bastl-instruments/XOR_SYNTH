@@ -10,21 +10,25 @@
 #define NOTE_ARP_CAUSAL 6
 #define NOTE_ARP_RANDOM 7
 
-#define ARP_VELOCITY 120
+
 
 unsigned char orderedBuffer[BUFFER_SIZE];
 
 
 
 void renderArp(){
-
+  /*
   seq.update(audioTicks());
-
-  if(!slave) {
-    while(seq.clockReady()) seq.clockIn(), sendClock();
-  } 
-
-  while(seq.stepReady()) {
+   seq.setClockDivider(1);
+   if(!slave) {
+   while(seq.clockReady()) seq.clockIn(), sendClock();
+   } 
+   */
+  if(!slave){
+    seq.clockIn();
+    sendClock();
+  }
+  while(seq.stepReady()){
     seq.stepIn();
     proceedStep(seq.getCurrentStep()); 
   }
@@ -71,12 +75,24 @@ void proceedStep(unsigned char _step){
 
     gate=true;
     if(notesInBuffer>0){
+
       seq.setNumberOfSteps(notesInBuffer);
       _note=orderedBuffer[_step];
-      lastVoice=voice;
-      voice=getFreeVoice(_note);
+
+
+
+
+
+      // lastVoice=voice;
+      voiceUse[lastVoice]=255;
       ADSR[lastVoice].noteOff();
-      playSound(sound,voice,_note,ARP_VELOCITY);
+
+      lastVoice=proceedNoteOn(_note,ARP_VELOCITY);
+
+    }
+    else{
+      voiceUse[lastVoice]=255;
+      ADSR[lastVoice].noteOff();
     }
     break;
 
@@ -86,10 +102,16 @@ void proceedStep(unsigned char _step){
     if(notesInBuffer>0){
       seq.setNumberOfSteps(notesInBuffer);
       _note=orderedBuffer[notesInBuffer-_step];
-      lastVoice=voice;
-      voice=getFreeVoice(_note);
+
+      // lastVoice=voice;
+      voiceUse[lastVoice]=255;
       ADSR[lastVoice].noteOff();
-      playSound(sound,voice,_note,ARP_VELOCITY);
+
+      lastVoice= proceedNoteOn(_note,ARP_VELOCITY);
+    }
+    else{
+      voiceUse[lastVoice]=255;
+      ADSR[lastVoice].noteOff();
     }
 
     break;
@@ -101,10 +123,16 @@ void proceedStep(unsigned char _step){
       seq.setNumberOfSteps(notesInBuffer*2);
       if(_step<notesInBuffer) _note=orderedBuffer[(2*notesInBuffer)-_step];
       else _note=orderedBuffer[_step];
-      lastVoice=voice;
-      voice=getFreeVoice(_note);
+
+      // lastVoice=voice;
+      voiceUse[lastVoice]=255;
       ADSR[lastVoice].noteOff();
-      playSound(sound,voice,_note,ARP_VELOCITY);
+
+      lastVoice=  proceedNoteOn(_note,ARP_VELOCITY);
+    }
+    else{
+      voiceUse[lastVoice]=255;
+      ADSR[lastVoice].noteOff();
     }
     break;
 
@@ -115,10 +143,18 @@ void proceedStep(unsigned char _step){
     if(notesInBuffer>0){
       seq.setNumberOfSteps(notesInBuffer);
       _note=midiBuffer[_step];
-      lastVoice=voice;
-      voice=getFreeVoice(_note);
+
+      // lastVoice=voice;
+      voiceUse[lastVoice]=255;
       ADSR[lastVoice].noteOff();
-      playSound(sound,voice,_note,ARP_VELOCITY);
+
+      lastVoice=proceedNoteOn(_note,ARP_VELOCITY);
+      ;
+
+    }
+    else{
+      voiceUse[lastVoice]=255;
+      ADSR[lastVoice].noteOff();
     }
     break;
 
@@ -129,10 +165,15 @@ void proceedStep(unsigned char _step){
     if(notesInBuffer>0){
       seq.setNumberOfSteps(notesInBuffer);
       _note=orderedBuffer[rand(notesInBuffer)];
-      lastVoice=voice;
-      voice=getFreeVoice(_note);
+      //   lastVoice=voice;
+      voiceUse[lastVoice]=255;
       ADSR[lastVoice].noteOff();
-      playSound(sound,voice,_note,ARP_VELOCITY);
+
+      lastVoice=proceedNoteOn(_note,ARP_VELOCITY);
+    }
+    else{
+      voiceUse[lastVoice]=255;
+      ADSR[lastVoice].noteOff();
     }
     break;
 
@@ -265,6 +306,13 @@ void RenderArpeggio(){
  
  }
  */
+
+
+
+
+
+
+
 
 
 

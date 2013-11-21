@@ -68,7 +68,7 @@ PROGMEM prog_uint16_t maxValue[]={
 
 
 //?
-#define ADSR_BITS 6
+#define ADSR_BITS 7
 #define SUSTAIN_BITS 8
 
 #define CHANNEL_BYTE 1023

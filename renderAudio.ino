@@ -1,13 +1,14 @@
-#define DOWN_SHIFT 3 // zkusit min
-boolean gate=true;
+#define DOWN_SHIFT 8 // zkusit min
+
+
 int updateAudio(){
 
 
-  long output=0;
+  int output=0;
 
 
 
-          
+
   // output+=aOsc[voice].next();  
   //   modulation[voice]=modDepth[voice]*aMod[voice].next();
   //  output+=((aOsc[voice].next()^xorAmt)*ADSR[voice].next())>>DOWN_SHIFT;
@@ -46,14 +47,17 @@ int updateAudio(){
 
 
   }
-  int amplitude = 255+lfoNow;
-  output=(output*amplitude)>>8;//<<5;//=(output*lfoNow)>>3;
-  
-  output*=gate;
-  
+
+  // 
+  //  amplitude = (255+lfoNow);//*gate;
+  output=(output*amplitude)>>3;//<<5;//=(output*lfoNow)>>3;
+
+  // output*=gate;
+
   return output;
 
 }
+
 
 
 

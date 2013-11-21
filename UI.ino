@@ -7,16 +7,23 @@ boolean midiNote;
 #define NUMBER_OF_PAGES 3
 #define KNOB_MODE SMALL_BUTTON_2
 #define DEFAULT_VELOCITY 127
+boolean slave=false;
 
 boolean combo;
 int var[NUMBER_OF_VARIABLES];
 unsigned char currentSound[NUMBER_OF_VOICES];
+#define NUMBER_OF_DIVIDERS 8
+unsigned char dividers[NUMBER_OF_DIVIDERS]={
+ // 0,2,5,11,23,47,95,191};
+  1,3,6,12,24,48,96,192};
 long lastTicks;
 unsigned char xorAmt;
 unsigned char xorType;
 unsigned char lfoAmt;
 boolean arp;
 unsigned char arpType;
+boolean gate=true;
+
 void UI(){
 
   //if(pokemon) pokemonMode();
@@ -24,6 +31,8 @@ void UI(){
   //else{
 
   hw.setColor(page+1);
+
+
   renderSmallButtons();
   renderCombo();
   renderBigButtons();
@@ -32,7 +41,8 @@ void UI(){
   renderTweaking(sound,page);
   renderLfo();
 
-  renderArp();
+  if(arp) renderArp();
+  //for(int i=0;i<3;i++) hw.setLed(i,ADSR[i].active());
 
   // }
 
@@ -47,9 +57,11 @@ void setAllValues(unsigned char _SOUND){
   for(int i=0;i<NUMBER_OF_VOICES;i++) aOsc[i].setTable(WAVE_TABLES[getBits(getVar(_SOUND,OSC_CHAR),2,2)]); 
   xorAmt=getVar(_SOUND,XOR_AMT)<<1;
   xorType=getBits(getVar(_SOUND,OSC_CHAR),0,2);
-
-  seq.setTempo(40+getVar(_SOUND,ARP_RATE)<<1);
-
+  if(!slave){
+    seq.setTempo(120);//5+getVar(_SOUND,ARP_RATE));
+    seq.setClockDivider(65-(getVar(_SOUND,ARP_RATE)>>1));
+  }
+  else seq.setClockDivider(dividers[8-(getVar(_SOUND,ARP_RATE)>>4)]);
   LFO.setAll(getVar(_SOUND,LFO_RATE)<<3,0,getVar(_SOUND,LFO_RES)); //getVar(_SOUND,LFO_SHAPE)
   lfoAmt=getVar(_SOUND,LFO_AMT)<<1;
   //LFO.reset();
@@ -120,9 +132,18 @@ void renderTweaking(unsigned char _SOUND, unsigned char _page){
       xorType=getBits(getVar(_SOUND,OSC_CHAR),0,2);
       for(int i=0;i<NUMBER_OF_VOICES;i++) aOsc[i].setTable(WAVE_TABLES[getBits(getVar(_SOUND,OSC_CHAR),2,2)]); 
     }
-    if(!hw.knobFreezed(LEFT_KNOB)&& hw.knobMoved(LEFT_KNOB)) xorAmt=getVar(_SOUND,XOR_AMT);
+    if(!hw.knobFreezed(LEFT_KNOB)&& hw.knobMoved(LEFT_KNOB)) xorAmt=getVar(_SOUND,XOR_AMT)<<1;
 
-    if(!hw.knobFreezed(TOP_KNOB)&& hw.knobMoved(TOP_KNOB)) seq.setTempo(40+getVar(_SOUND,ARP_RATE)<<1);
+    if(!hw.knobFreezed(TOP_KNOB)&& hw.knobMoved(TOP_KNOB)) {
+
+      //  seq.setTempo(40+getVar(_SOUND,ARP_RATE)<<1);
+      if(!slave){
+        seq.setTempo(120);//5+getVar(_SOUND,ARP_RATE));
+        seq.setClockDivider(65-(getVar(_SOUND,ARP_RATE)>>1)); 
+      }
+      else seq.setClockDivider(dividers[8-(getVar(_SOUND,ARP_RATE)>>4)]);
+
+    }
 
     break;
 
@@ -146,10 +167,12 @@ void renderTweaking(unsigned char _SOUND, unsigned char _page){
 
 }
 int lfoNow;
-
+int amplitude;
 void renderLfo(){
+
   LFO.update();
   lfoNow=((lfoAmt*LFO.next())>>8)-127;
+  amplitude = (255+lfoNow)*gate;
 }
 
 /*
@@ -157,6 +180,10 @@ boolean isDestination(unsigned char voice,unsigned char _destination){
  return bitRead(destination[voice],_destination); 
  }
  */
+void resetEnvelope(){
+  for(int i=0;i<NUMBER_OF_VOICES;i++) ADSR[i].noteOff(); 
+}
+
 
 void renderSmallButtons(){
   // knobMode
@@ -168,8 +195,8 @@ void renderSmallButtons(){
   if(page==OSC_PAGE){
     if(hw.justReleased(SMALL_BUTTON_1) && !combo){
       arp=!arp;
-      if(arp) seq.play();
-      else seq.stop(), sendAllNoteOff(); 
+      if(arp) seq.play(); //sendAllNoteOff(), 
+      else seq.stop(), gate=true, sendAllNoteOff(),freeAllVoices(), resetEnvelope(), playNotesFromBuffer();//,  resetBuffer() playNotesFromBuffer(); 
     }
   }
   else{
@@ -398,6 +425,8 @@ void animation(){
  } 
  }
  */
+
+
 
 
 
