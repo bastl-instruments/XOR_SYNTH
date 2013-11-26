@@ -1,22 +1,25 @@
 
 
-#define ARP_OFF 0
+
 #define GATE_ARP_0 0
 #define GATE_ARP_1 1
 #define GATE_ARP_2 2
 #define NOTE_ARP_UP 3
 #define NOTE_ARP_DOWN 4
 #define NOTE_ARP_UP_DOWN 5
-#define NOTE_ARP_CAUSAL 6
-#define NOTE_ARP_RANDOM 7
+#define NOTE_ARP_UP_DOWN_EXCLUSIVE 6
+#define NOTE_ARP_CAUSAL 7
+#define NOTE_ARP_RANDOM 8
 
 
 
 unsigned char orderedBuffer[BUFFER_SIZE];
 
-
-
+unsigned char lastNotes;
+unsigned char notesInOrderedBuffer;
+unsigned char lastVoice;
 void renderArp(){
+
   /*
   seq.update(audioTicks());
    seq.setClockDivider(1);
@@ -24,11 +27,23 @@ void renderArp(){
    while(seq.clockReady()) seq.clockIn(), sendClock();
    } 
    */
+
+
+  if(lastNotes==0 && notesInOrderedBuffer!=0 && !slave) seq.play();  //,seq.jumpToStep(0);
+
+  if(lastNotes!=0 && notesInOrderedBuffer==0 && voiceUse[lastVoice]!=255){
+    voiceUse[lastVoice]=255;
+    ADSR[lastVoice].noteOff();
+  }
+
+  lastNotes=notesInOrderedBuffer;
   if(!slave){
+
     seq.clockIn();
     sendClock();
   }
   while(seq.stepReady()){
+    if(notesInOrderedBuffer!=0) hw.setColor(WHITE);
     seq.stepIn();
     proceedStep(seq.getCurrentStep()); 
   }
@@ -41,48 +56,51 @@ void sendClock(){
   MIDI.sendRealTime(Clock);
 }
 
-unsigned char lastVoice;
+//for(int i=0;i<NUMBER_OF_VOICES;i++) if(!ADSR[i].active()) voiceUse[i]=255;
+
+
 void proceedStep(unsigned char _step){
 
 
   // showTempo(_step);
   unsigned char voice,_note;
+
+
+
   switch(arpType){
 
-  case GATE_ARP_0:
+  default:
+    gateArp=true;
     seq.setNumberOfSteps(8);
     if(_step%2==1) gate=false;
     else gate=true;
     break;
 
   case GATE_ARP_1:
-
+    gateArp=true;
     seq.setNumberOfSteps(8);
-    if(_step%2==1) gate=false;
+    if(_step%3==1) gate=false;
     else gate=true;
     break;
 
   case GATE_ARP_2:
-
+    gateArp=true;
     seq.setNumberOfSteps(8);
     if(_step<4){
-      if(_step%2==1) gate=false;
-      else gate=true;
+      if(_step%2==0) gate=true;
+      else gate=false;
     }
+    else if(_step==7) gate=false;
     else  gate=true;
     break;
+
   case NOTE_ARP_UP:
-
+    gateArp=false;
     gate=true;
-    if(notesInBuffer>0){
+    if(notesInOrderedBuffer>0){
 
-      seq.setNumberOfSteps(notesInBuffer);
+      seq.setNumberOfSteps(notesInOrderedBuffer);
       _note=orderedBuffer[_step];
-
-
-
-
-
       // lastVoice=voice;
       voiceUse[lastVoice]=255;
       ADSR[lastVoice].noteOff();
@@ -90,18 +108,15 @@ void proceedStep(unsigned char _step){
       lastVoice=proceedNoteOn(_note,ARP_VELOCITY);
 
     }
-    else{
-      voiceUse[lastVoice]=255;
-      ADSR[lastVoice].noteOff();
-    }
+
     break;
 
   case NOTE_ARP_DOWN:
-
+    gateArp=false;
     gate=true;
-    if(notesInBuffer>0){
-      seq.setNumberOfSteps(notesInBuffer);
-      _note=orderedBuffer[notesInBuffer-_step];
+    if(notesInOrderedBuffer>0){
+      seq.setNumberOfSteps(notesInOrderedBuffer);
+      _note=orderedBuffer[notesInOrderedBuffer-_step-1];
 
       // lastVoice=voice;
       voiceUse[lastVoice]=255;
@@ -109,40 +124,53 @@ void proceedStep(unsigned char _step){
 
       lastVoice= proceedNoteOn(_note,ARP_VELOCITY);
     }
-    else{
-      voiceUse[lastVoice]=255;
-      ADSR[lastVoice].noteOff();
-    }
 
     break;
 
   case NOTE_ARP_UP_DOWN:
-
+    gateArp=false;
     gate=true;
-    if(notesInBuffer>0){
-      seq.setNumberOfSteps(notesInBuffer*2);
-      if(_step<notesInBuffer) _note=orderedBuffer[(2*notesInBuffer)-_step];
-      else _note=orderedBuffer[_step];
+
+    if(notesInOrderedBuffer>0){
+      seq.setNumberOfSteps(notesInOrderedBuffer*2);
+      if(_step<notesInOrderedBuffer) _note=orderedBuffer[_step];
+      else _note=orderedBuffer[(2*notesInOrderedBuffer)-_step-1];
 
       // lastVoice=voice;
       voiceUse[lastVoice]=255;
       ADSR[lastVoice].noteOff();
 
-      lastVoice=  proceedNoteOn(_note,ARP_VELOCITY);
+      lastVoice=proceedNoteOn(_note,ARP_VELOCITY);
     }
-    else{
+
+    break;
+
+  case NOTE_ARP_UP_DOWN_EXCLUSIVE:
+    gateArp=false;
+    gate=true;
+
+    if(notesInOrderedBuffer>0){
+      seq.setNumberOfSteps((notesInOrderedBuffer*2) - 2);
+      if(_step<(notesInOrderedBuffer-1)) _note=orderedBuffer[_step];
+      else _note=orderedBuffer[(2*notesInOrderedBuffer)-_step-2];
+
+      // lastVoice=voice;
       voiceUse[lastVoice]=255;
       ADSR[lastVoice].noteOff();
+
+      lastVoice=proceedNoteOn(_note,ARP_VELOCITY);
     }
+
     break;
 
   case NOTE_ARP_CAUSAL:
-
+    gateArp=false;
     gate=true;
+    if(!sustainPedal) causaliseBuffer;
 
-    if(notesInBuffer>0){
-      seq.setNumberOfSteps(notesInBuffer);
-      _note=midiBuffer[_step];
+    if(notesInOrderedBuffer>0){
+      seq.setNumberOfSteps(notesInOrderedBuffer);
+      _note=orderedBuffer[_step];
 
       // lastVoice=voice;
       voiceUse[lastVoice]=255;
@@ -152,36 +180,34 @@ void proceedStep(unsigned char _step){
       ;
 
     }
-    else{
-      voiceUse[lastVoice]=255;
-      ADSR[lastVoice].noteOff();
-    }
+
     break;
 
   case NOTE_ARP_RANDOM:
-
+    gateArp=false;
     gate=true;
 
-    if(notesInBuffer>0){
-      seq.setNumberOfSteps(notesInBuffer);
-      _note=orderedBuffer[rand(notesInBuffer)];
+    if(notesInOrderedBuffer>0){
+      seq.setNumberOfSteps(notesInOrderedBuffer);
+      _note=orderedBuffer[rand(notesInOrderedBuffer)];
       //   lastVoice=voice;
       voiceUse[lastVoice]=255;
       ADSR[lastVoice].noteOff();
 
       lastVoice=proceedNoteOn(_note,ARP_VELOCITY);
     }
-    else{
-      voiceUse[lastVoice]=255;
-      ADSR[lastVoice].noteOff();
-    }
+
     break;
 
   }
 
 }
 
+void causaliseBuffer(){
+  for(int j=0;j<BUFFER_SIZE;j++)  orderedBuffer[j]=midiBuffer[j];
 
+  notesInOrderedBuffer=notesInBuffer;
+}
 
 
 void orderBuffer(){
@@ -202,110 +228,10 @@ void orderBuffer(){
     orderedBuffer[j]=nextOne;
   }
 
+  notesInOrderedBuffer=notesInBuffer;
+
 }
 
-
-
-
-
-
-/*
-void RenderArpeggio(){
- 
- 
- if(doArpeggio){
- if(kArpeggioTime.ready()){
- kArpeggioTime.start();
- 
- boolean flag=true;
- unsigned char temp;
- 
- switch(arpeggioType){
- case 0:
- arpeggioGate=!arpeggioGate;
- break;
- 
- case 1:
- 
- arpeggioGate=true;
- if(arpeggioBuffer[arpeggioNote]!=0){
- SetNoteOff(arpeggioBuffer[arpeggioNote]);
- };
- arpeggioNote++;
- if(arpeggioNote>=notesInArpeggio) arpeggioNote=0; 
- if(arpeggioBuffer[arpeggioNote]!=0){ 
- SetNoteOn(arpeggioBuffer[arpeggioNote],64);
- }
- 
- break;
- 
- case 2:
- arpeggioGate=true;
- if(arpeggioBuffer[arpeggioNote]!=0){
- SetNoteOff(arpeggioBuffer[arpeggioNote]);
- };
- arpeggioNote++;
- if(arpeggioNote>=notesInArpeggio) arpeggioNote=0; 
- if(arpeggioBuffer[arpeggioNote]!=0){ 
- SetNoteOn(arpeggioBuffer[arpeggioNote],64);
- }
- break;
- case 3:
- arpeggioGate=true;
- if(arpeggioBuffer[arpeggioNote]!=0){
- SetNoteOff(arpeggioBuffer[arpeggioNote]);
- }
- if(notesInArpeggio!=0){
- if(arpeggioNote==0) arpeggioNote=notesInArpeggio-1;
- else arpeggioNote--;
- }
- if(arpeggioBuffer[arpeggioNote]!=0){ 
- SetNoteOn(arpeggioBuffer[arpeggioNote],64);
- }
- break;
- case 4:
- arpeggioGate=true;
- if(arpeggioBuffer[arpeggioNote]!=0){
- SetNoteOff(arpeggioBuffer[arpeggioNote]);
- }
- if(arpUp){
- arpeggioNote++;
- if(arpeggioNote>=notesInArpeggio) arpUp=false,arpeggioNote--; 
- 
- }
- if(!arpUp){
- if(notesInArpeggio!=0){
- if(arpeggioNote==0) arpUp=true,  arpeggioNote++;
- else arpeggioNote--;
- }
- 
- }
- if(arpeggioBuffer[arpeggioNote]!=0){ 
- SetNoteOn(arpeggioBuffer[arpeggioNote],64);
- }
- 
- break;
- 
- case 5:
- 
- arpeggioGate=true;
- if(arpeggioBuffer[arpeggioNote]!=0){
- SetNoteOff(arpeggioBuffer[arpeggioNote]);
- };
- arpeggioNote=rand(notesInArpeggio);
- if(arpeggioBuffer[arpeggioNote]!=0){ 
- SetNoteOn(arpeggioBuffer[arpeggioNote],64);
- }
- break;
- 
- }
- 
- } 
- 
- }
- 
- }
- */
 
 
 

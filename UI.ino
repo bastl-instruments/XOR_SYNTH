@@ -1,20 +1,20 @@
-
-
 boolean pokemon=false;
 unsigned char page;
-unsigned char sound,lastSound;
+boolean test;
 boolean midiNote;
 #define NUMBER_OF_PAGES 3
 #define KNOB_MODE SMALL_BUTTON_2
 #define DEFAULT_VELOCITY 127
+#define NUMBER_OF_ARP_TYPES 9
 boolean slave=false;
+boolean sustainPedal;
 
 boolean combo;
-int var[NUMBER_OF_VARIABLES];
-unsigned char currentSound[NUMBER_OF_VOICES];
+//int var[NUMBER_OF_VARIABLES];
+//unsigned char currentSound[NUMBER_OF_VOICES];
 #define NUMBER_OF_DIVIDERS 8
 unsigned char dividers[NUMBER_OF_DIVIDERS]={
- // 0,2,5,11,23,47,95,191};
+  // 0,2,5,11,23,47,95,191};
   1,3,6,12,24,48,96,192};
 long lastTicks;
 unsigned char xorAmt;
@@ -23,27 +23,32 @@ unsigned char lfoAmt;
 boolean arp;
 unsigned char arpType;
 boolean gate=true;
+int pitchBend;
+unsigned char bendRange=2;
+boolean gateArp=true;
 
 void UI(){
 
   //if(pokemon) pokemonMode();
 
   //else{
+  if(test) testMode();
+  else{
+    hw.setColor(page+1);
 
-  hw.setColor(page+1);
 
+    renderSmallButtons();
+    renderCombo();
+    renderBigButtons();
+    renderKnobs();
+    renderEnvelope();
+    renderTweaking(sound,page);
+    renderLfo();
 
-  renderSmallButtons();
-  renderCombo();
-  renderBigButtons();
-  renderKnobs();
-  renderEnvelope();
-  renderTweaking(sound,page);
-  renderLfo();
-
-  if(arp) renderArp();
+    if(arp) renderArp();
+  }
   //for(int i=0;i<3;i++) hw.setLed(i,ADSR[i].active());
-
+  //if(sustainPedal) hw.setColor(WHITE);
   // }
 
 }
@@ -53,16 +58,25 @@ void setAllValues(unsigned char _SOUND){
 
   // for(int i=0;i<NUMBER_OF_VARIABLES;i++) var[i]=getVar(_SOUND,i);
 
-
-  for(int i=0;i<NUMBER_OF_VOICES;i++) aOsc[i].setTable(WAVE_TABLES[getBits(getVar(_SOUND,OSC_CHAR),2,2)]); 
+  unsigned char wt=getBits(getVar(_SOUND,OSC_CHAR),0,2);
+  for(int i=0;i<NUMBER_OF_VOICES;i++) aOsc[i].setTable(WAVE_TABLES[wt]); 
+  //  xorType=map(getBits(getVar(_SOUND,OSC_CHAR),2,3),0,8,0,5);
+  xorType=getBits(getVar(_SOUND,OSC_CHAR),2,2);
+  if(wt==3 && xorType==3) xorType=4;
   xorAmt=getVar(_SOUND,XOR_AMT)<<1;
-  xorType=getBits(getVar(_SOUND,OSC_CHAR),0,2);
+
+
+
+  arpType=getVar(_SOUND,ARP_TYPE);
+
+
   if(!slave){
     seq.setTempo(120);//5+getVar(_SOUND,ARP_RATE));
     seq.setClockDivider(65-(getVar(_SOUND,ARP_RATE)>>1));
   }
   else seq.setClockDivider(dividers[8-(getVar(_SOUND,ARP_RATE)>>4)]);
-  LFO.setAll(getVar(_SOUND,LFO_RATE)<<3,0,getVar(_SOUND,LFO_RES)); //getVar(_SOUND,LFO_SHAPE)
+
+  LFO.setAll(getVar(_SOUND,LFO_RATE)<<3,getVar(_SOUND,LFO_SHAPE),getVar(_SOUND,LFO_RES)); //
   lfoAmt=getVar(_SOUND,LFO_AMT)<<1;
   //LFO.reset();
 
@@ -79,7 +93,7 @@ void setAllValues(unsigned char _SOUND){
 void playSound(unsigned char _SOUND, unsigned char _VELOCITY){
 
   unsigned char voice=_SOUND%3;
-  currentSound[voice]=_SOUND;
+  //  currentSound[voice]=_SOUND;
   setAllValues(_SOUND);
   midiNote=false;
   //ADSR[voice].noteOff();
@@ -90,6 +104,7 @@ void playSound(unsigned char _SOUND, unsigned char _VELOCITY){
 
 
 float freq[NUMBER_OF_VOICES];
+unsigned char noteVoice[NUMBER_OF_VOICES];
 
 void playSound(unsigned char _SOUND, unsigned char voice, unsigned char _PITCH, unsigned char _VELOCITY){
 
@@ -98,9 +113,16 @@ void playSound(unsigned char _SOUND, unsigned char voice, unsigned char _PITCH, 
 
 
   // setAllValues(_SOUND); // nemusi byt
-
-  freq[voice]=float(mtof(_PITCH));
+  noteVoice[voice]=_PITCH;
+  freq[voice]=float(mtof(_PITCH)); //pitchBend; mtof(_PITCH)
   aOsc[voice].setFreq(freq[voice]);
+
+  if(pitchBend==0){
+    aOsc[voice].setFreq(freq[voice]);
+  }
+  else{
+    aOsc[voice].setFreq((float)map(pitchBend,-8191,8192,(float)mtof(noteVoice[voice]-bendRange),(float)mtof(noteVoice[voice]+bendRange) )); //freq[i]+
+  }
 
   midiNote=true;
   ADSR[voice].noteOff();
@@ -129,8 +151,12 @@ void renderTweaking(unsigned char _SOUND, unsigned char _page){
   case OSC_PAGE:
 
     if(!hw.knobFreezed(RIGHT_KNOB) && hw.knobMoved(RIGHT_KNOB)){
-      xorType=getBits(getVar(_SOUND,OSC_CHAR),0,2);
-      for(int i=0;i<NUMBER_OF_VOICES;i++) aOsc[i].setTable(WAVE_TABLES[getBits(getVar(_SOUND,OSC_CHAR),2,2)]); 
+
+      unsigned char wt=getBits(getVar(_SOUND,OSC_CHAR),0,2);
+      for(int i=0;i<NUMBER_OF_VOICES;i++) aOsc[i].setTable(WAVE_TABLES[wt]); 
+      // xorType=map(getBits(getVar(_SOUND,OSC_CHAR),2,3),0,8,0,5);
+      xorType=getBits(getVar(_SOUND,OSC_CHAR),2,2);
+      if(wt==3 && xorType==3) xorType=4;
     }
     if(!hw.knobFreezed(LEFT_KNOB)&& hw.knobMoved(LEFT_KNOB)) xorAmt=getVar(_SOUND,XOR_AMT)<<1;
 
@@ -148,16 +174,15 @@ void renderTweaking(unsigned char _SOUND, unsigned char _page){
     break;
 
   case LFO_PAGE:
-    LFO.setAll(getVar(_SOUND,LFO_RATE)<<3,0,getVar(_SOUND,LFO_RES));
+    LFO.setAll(getVar(_SOUND,LFO_RATE)<<3,getVar(_SOUND,LFO_SHAPE),getVar(_SOUND,LFO_RES));
     if(!hw.knobFreezed(LEFT_KNOB) && hw.knobMoved(LEFT_KNOB)) lfoAmt=getVar(_SOUND,LFO_AMT)<<1;
     break;
 
   case ADSR_PAGE:
     for(int i=0;i<NUMBER_OF_VOICES;i++) {
-      ADSR[i].setAttack(scale(getVar(_SOUND,ATACK),variableDepth[ATACK],ADSR_BITS)) ;
-      ADSR[i].setDecay(scale(getVar(_SOUND,DECAY),variableDepth[DECAY],ADSR_BITS)) ;
-      ADSR[i].setSustain(scale(getVar(_SOUND,SUSTAIN),variableDepth[SUSTAIN],SUSTAIN_BITS));
-      ADSR[i].setRelease(scale(getVar(_SOUND,RELEASE),variableDepth[RELEASE],ADSR_BITS));
+      if(!hw.knobFreezed(TOP_KNOB) && hw.knobMoved(TOP_KNOB)) ADSR[i].setAttack(scale(getVar(_SOUND,ATACK),variableDepth[ATACK],ADSR_BITS)) ;
+      if(!hw.knobFreezed(LEFT_KNOB) && hw.knobMoved(LEFT_KNOB)) ADSR[i].setSustain(scale(getVar(_SOUND,SUSTAIN),variableDepth[SUSTAIN],SUSTAIN_BITS));
+      if(!hw.knobFreezed(RIGHT_KNOB) && hw.knobMoved(RIGHT_KNOB))  ADSR[i].setRelease(scale(getVar(_SOUND,RELEASE),variableDepth[RELEASE],ADSR_BITS));
     }
     break;
   }
@@ -171,8 +196,8 @@ int amplitude;
 void renderLfo(){
 
   LFO.update();
-  lfoNow=((lfoAmt*LFO.next())>>8)-127;
-  amplitude = (255+lfoNow)*gate;
+  lfoNow=255-((lfoAmt*LFO.next())>>8);// 
+  amplitude=(lfoNow-(xorAmt>>7)*50)*gate;
 }
 
 /*
@@ -194,33 +219,83 @@ void renderSmallButtons(){
   } 
   if(page==OSC_PAGE){
     if(hw.justReleased(SMALL_BUTTON_1) && !combo){
+
       arp=!arp;
       if(arp) seq.play(); //sendAllNoteOff(), 
-      else seq.stop(), gate=true, sendAllNoteOff(),freeAllVoices(), resetEnvelope(), playNotesFromBuffer();//,  resetBuffer() playNotesFromBuffer(); 
+      else turnArpOff();
     }
   }
   else{
-    if(hw.justReleased(SMALL_BUTTON_1) && !combo) setVar(sound,page*VARIABLES_PER_PAGE+3,increaseValue(getVar(sound,page*VARIABLES_PER_PAGE+3),maxValue[page*VARIABLES_PER_PAGE+3]));
+
+
+    if(hw.justReleased(SMALL_BUTTON_1) && !combo){
+
+      if(page==ADSR_PAGE) {
+        setVar(sound,DECAY,increaseValue(getVar(sound,DECAY),maxValue[DECAY]));
+        for(int i=0;i<NUMBER_OF_VOICES;i++) ADSR[i].setDecay(scale(getVar(sound,DECAY),variableDepth[DECAY],ADSR_BITS)) ;
+      }
+      if(page==LFO_PAGE){
+        setVar(sound,LFO_SHAPE,increaseValue(getVar(sound,LFO_SHAPE),maxValue[LFO_SHAPE]));
+        LFO.setShape(getVar(sound,LFO_SHAPE));
+      }
+    }
   }
 }
 
+
+void turnArpOff(){
+  gateArp=true;
+  seq.stop();
+  gate=true; 
+  sendAllNoteOff();
+  freeAllVoices(); 
+  resetEnvelope();
+  playNotesFromBuffer();//,  resetBuffer() playNotesFromBuffer(); 
+
+}
+
+#define LONG_THRESHOLD 80
+boolean countLong, longPress;
+int longCount;
+
 void renderCombo(){
 
-  //loading saving presets
-  // if(hw.buttonState(SMALL_BUTTON_2) && hw.justPressed(SMALL_BUTTON_1)) loadPreset(0), hw.freezeAllKnobs(), combo=true;
-  for(int i=0;i<3;i++){
-    //  if(hw.buttonState(EXTRA_BUTTON_2) && hw.justPressed(i)) randomize(i+3*shift); // randomize 
-    if(hw.buttonState(SMALL_BUTTON_1) && hw.buttonState(SMALL_BUTTON_2) && hw.justPressed(i)) storePreset(currentPreset), loadPreset(i), hw.freezeAllKnobs(), combo=true; // save&load
-    if(hw.buttonState(SMALL_BUTTON_2) && hw.justPressed(i)) loadPreset(i), hw.freezeAllKnobs(), combo=true; // load
-
-    if(hw.buttonState(SMALL_BUTTON_1) && hw.justPressed(SMALL_BUTTON_2)) arpType=increaseValue(arpType,7),combo=true;
+  if(countLong) {
+    longCount++;
+    if(longCount>LONG_THRESHOLD) longPress=true;
   }
+
+
+  for(int i=0;i<3;i++){
+
+    if(hw.buttonState(EXTRA_BUTTON_2) && hw.justPressed(i)) randomize(sound); // randomize 
+    if(hw.buttonState(SMALL_BUTTON_1) && hw.buttonState(SMALL_BUTTON_2) && hw.justPressed(i)) countLong=true,longCount=0, combo=true; // save&load
+    if(hw.buttonState(SMALL_BUTTON_1) && hw.buttonState(SMALL_BUTTON_2) && hw.justReleased(i)){
+      if(longPress) storePreset(currentPreset),loadPreset(i+3), hw.freezeAllKnobs(), combo=true; // save&load
+      else storePreset(currentPreset), loadPreset(i+3*hw.buttonState(EXTRA_BUTTON_2)), hw.freezeAllKnobs(), combo=true;
+      // countLong=false, longCount=0,longPress=false;
+    }
+
+    if(hw.buttonState(SMALL_BUTTON_2) && hw.justPressed(i)) countLong=true,longCount=0, combo=true; // load
+    if(hw.buttonState(SMALL_BUTTON_2) && hw.justReleased(i)){
+      if(longPress) loadPreset(i+3), hw.freezeAllKnobs();
+      else loadPreset(i+3*hw.buttonState(EXTRA_BUTTON_2)), hw.freezeAllKnobs();
+      // countLong=false, longCount=0, longPress=false;
+    }
+
+    if(longPress) hw.setLed(i,true);
+    else hw.setLed(i,hw.switchState(i));
+  }
+
+  if(page==OSC_PAGE && hw.buttonState(SMALL_BUTTON_1) && hw.justPressed(SMALL_BUTTON_2)) arpType=increaseValue(arpType,NUMBER_OF_ARP_TYPES-1),combo=true, setVar(sound,ARP_TYPE,arpType);
+
 
   if(combo){
     //turn off combo when all buttons are released 
     unsigned char _count=0; 
     for(int i=0;i<NUMBER_OF_BUTTONS;i++)  _count+=hw.buttonState(i); // if(!hw.buttonState(i)) combo=false;
-    if(_count==0) combo=false;
+    if(_count==0) combo=false,countLong=false, longCount=0,longPress=false;
+
     //else combo=true;
   } 
 
@@ -275,12 +350,12 @@ int increaseValue(int _VALUE, int _OVERFLOW){
   else _VALUE=0;
   return _VALUE;
 }
-
+/*
 int decreaseValue(int _VALUE, int _OVERFLOW){
   if(_VALUE > _OVERFLOW) _VALUE--;
   return _VALUE;
 }
-
+*/
 
 
 int increaseValue(int _VALUE, int _OVERFLOW, int _INCREMENT){
@@ -425,6 +500,15 @@ void animation(){
  } 
  }
  */
+
+
+
+
+
+
+
+
+
 
 
 

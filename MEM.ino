@@ -1,6 +1,6 @@
 
 PROGMEM prog_uchar clearTo[]={
-  0,0,0,0, 0,0,0,0, 0,127,0,0};
+  0,0,0,0, 64,0,31,0, 0,127,0,0};
 /*
 
 wavetable
@@ -26,9 +26,9 @@ atck,sus, rel B - decay
 #define ARP_RATE 0 // 127 -7
 #define XOR_AMT 1 // 127 -7
 #define OSC_CHAR 2 // WT + XOR 3*3 = 9 - 4 bity
-#define ARP_TYPE 3 // 5 -3
+#define ARP_TYPE 3 // 5 -4
 
-//7+7+4+3 = 21
+//7+7+4+4 = 22
 
 #define LFO_RATE 4 // 127 - 7
 #define LFO_AMT 5 // 127 - 7
@@ -44,9 +44,9 @@ atck,sus, rel B - decay
 
 // 7+7+7+3 = 24
 
-//21+22+24 = 67
+//22+22+24 = 68
 
-// =>67 bitu => 9 bytu
+// =>68 bitu => 9 bytu
 
 //8 zvuku *9 bytů = 72 bytů / preset
 
@@ -54,12 +54,12 @@ atck,sus, rel B - decay
 
 
 PROGMEM prog_uint16_t maxValue[]={
-  127,127,15,7,  127,127,31,7, 127,127,127,7}; //const
+  127,127,15,15,  127,127,31,7, 127,127,127,7}; //const
   
 
 #define NUMBER_OF_VARIABLES 12
 #define NUMBER_OF_BYTES 9
-#define NUMBER_OF_PRESETS 3
+#define NUMBER_OF_PRESETS 6
 
 //8*9
 #define PRESET_SIZE 72

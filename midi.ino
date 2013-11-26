@@ -3,7 +3,8 @@
 #define CONTROL_CHANGE_BITS 7
 #define CONTROL_CHANGE_OFFSET 102
 #define ARP_VELOCITY 120
-
+#define SWITCH_BYTE 14
+#define PAGE_BYTE 13
 
 unsigned char midiSound;
 
@@ -58,36 +59,36 @@ boolean pink;
 unsigned char getFreeVoice(unsigned char note){
 
   unsigned char use=255;
-/*
+  /*
   for(int i=0;i<NUMBER_OF_VOICES;i++){
-    if(voiceUse[i]==255) {
-      voiceUse[i]=note, use=i;
-      break; 
-    }
-  }
-  if(use<NUMBER_OF_VOICES) return use;
-
-  */
-     pink=!pink;
-   if(pink){
-   
-   for(int i=0;i<NUMBER_OF_VOICES;i++){
    if(voiceUse[i]==255) {
    voiceUse[i]=note, use=i;
    break; 
    }
-   }
-   }
-   else{
-   for(int i=NUMBER_OF_VOICES;i>=0;i--){
-   if(voiceUse[i]==255) {
-   voiceUse[i]=note, use=i;
-   break; 
-   }
-   } 
    }
    if(use<NUMBER_OF_VOICES) return use;
    
+   */
+  pink=!pink;
+  if(pink){
+
+    for(int i=0;i<NUMBER_OF_VOICES;i++){
+      if(voiceUse[i]==255) {
+        voiceUse[i]=note, use=i;
+        break; 
+      }
+    }
+  }
+  else{
+    for(int i=NUMBER_OF_VOICES;i>=0;i--){
+      if(voiceUse[i]==255) {
+        voiceUse[i]=note, use=i;
+        break; 
+      }
+    } 
+  }
+  if(use<NUMBER_OF_VOICES) return use;
+
 
 
 
@@ -173,8 +174,8 @@ void HandleNoteOn(byte channel, byte note, byte velocity) {
 
       else{
         putNoteIn(note);
-        if(arp) orderBuffer();
-        else if(isThereNoteToPlay()) proceedNoteOn(noteToPlay(), velocity);
+        orderBuffer();
+        if(gateArp && isThereNoteToPlay()) proceedNoteOn(noteToPlay(), velocity);
         //  midiSound=note%6;
 
       }
@@ -188,7 +189,7 @@ unsigned char proceedNoteOn(unsigned char _note, unsigned char velocity){
   unsigned char voice=getFreeVoice(_note);
   //  ADSR[voice].noteOff();
   playSound(sound,voice,_note,velocity);
-    return voice;
+  return voice;
 
 }
 
@@ -201,14 +202,16 @@ void HandleNoteOff(byte channel, byte note, byte velocity){
       unsigned char voice=note%3;
       unsigned char _sound=note%6;
 
-      if(currentSound[voice]==_sound) ADSR[voice].noteOff();
+      //if(currentSound[voice]==_sound) 
+      ADSR[voice].noteOff();
     }
     else{
       unsigned char outVoice=putNoteOut(note);
-      if(outVoice<NUMBER_OF_VOICES) ADSR[outVoice].noteOff();
+      if(outVoice<NUMBER_OF_VOICES && !sustainPedal) ADSR[outVoice].noteOff();
 
-      if(arp) orderBuffer();
-      else if(isThereNoteToPlay()) proceedNoteOn(noteToPlay(), ARP_VELOCITY); 
+      if(!sustainPedal) orderBuffer();
+
+      if(gateArp && isThereNoteToPlay()) proceedNoteOn(noteToPlay(), ARP_VELOCITY); 
       /*
         else{
        if(outVoice<NUMBER_OF_VOICES) ADSR[outVoice].noteOff();
@@ -223,24 +226,81 @@ void HandleNoteOff(byte channel, byte note, byte velocity){
   }
 }
 
+#define MOD_WHEEL_BYTE 1
+#define SUSTAIN_PEDAL_BYTE 64
+#define PRESET_BY_CC_BYTE 0
+#define RANDOMIZE_BYTE 127
+
+#define CONTROL_CHANGE_BITS 7
+#define CONTROL_CHANGE_OFFSET 3
+#define CONTROL_CHANGE_OFFSET_2 102
+#define ARP_SWITCH 114
+
 void HandleControlChange(byte channel, byte number, byte value){
   // implement knob movement
   if(channel==inputChannel){
-    if((number-CONTROL_CHANGE_OFFSET )<NUMBER_OF_VARIABLES){
-      setVar(midiSound,number-CONTROL_CHANGE_OFFSET,scale(value,CONTROL_CHANGE_BITS,variableDepth[number-CONTROL_CHANGE_OFFSET]));  
-      hw.freezeAllKnobs();
-      renderTweaking(sound,(number-CONTROL_CHANGE_OFFSET)/VARIABLES_PER_PAGE);
+    midiSound=sound;
+    if(number==PRESET_BY_CC_BYTE) loadPreset(map(value,0,128,0,NUMBER_OF_PRESETS)), hw.freezeAllKnobs();
+    else if(number==SUSTAIN_PEDAL_BYTE){
+      if(value>>6){
+        sustainPedal=true;
+      }
+
+      else{
+        for(int i=0;i<NUMBER_OF_VOICES;i++) if(voiceUse[i]==255) ADSR[i].noteOff();
+        orderBuffer();
+        sustainPedal=false;
+
+      }
     }
+
+    else if (number==ARP_SWITCH){ 
+      arp=value>>6;
+      if(arp) seq.play(); //sendAllNoteOff(), 
+      else turnArpOff();
+    }
+
+    else if(number==RANDOMIZE_BYTE) randomize(midiSound);
+    else if(number==MOD_WHEEL_BYTE) setVar(midiSound,LFO_AMT,scale(value,CONTROL_CHANGE_BITS,variableDepth[LFO_AMT])), lfoAmt=getVar(midiSound,LFO_AMT)<<1;  
+
+    else if(number>=CONTROL_CHANGE_OFFSET_2 && number<=(CONTROL_CHANGE_OFFSET_2+NUMBER_OF_VARIABLES)){
+      number=number-CONTROL_CHANGE_OFFSET_2;
+      setVar(midiSound,number,scale(value,CONTROL_CHANGE_BITS,variableDepth[number]));  
+      hw.freezeAllKnobs();
+      renderTweaking(sound,(number)/VARIABLES_PER_PAGE);
+    }
+
+  }
+  
+  if(number==SWITCH_BYTE){
+    for(int i=0;i<3;i++) hw.setSwitch(i,bitRead(value,i));
+  }
+  else if(number==PAGE_BYTE){
+    page=value;
   }
 
 }
 
 void HandleProgramChange(byte channel, byte number  ){
+
   // implement preset change
 }
 
+
+
 void HandlePitchBend(byte channel, int bend){
 
+  if(channel==inputChannel){
+    pitchBend=bend;//int(bend-64);
+    if(pitchBend==0){
+      for(int i=0;i<NUMBER_OF_VOICES;i++)  aOsc[i].setFreq(freq[i]);
+    }
+    else{
+      for(int i=0;i<NUMBER_OF_VOICES;i++) aOsc[i].setFreq((float)map(pitchBend,-8191,8192,(float)mtof(noteVoice[i]-bendRange),(float)mtof(noteVoice[i]+bendRange) )); //freq[i]+
+    }
+  }
+  //centre 8192
+  //max 16383
 }
 
 void HandleSongSelect(byte songnumber){
@@ -284,7 +344,7 @@ void initMidi(unsigned char _channel){
 
   MIDI.setHandleControlChange(HandleControlChange);
   MIDI.setHandleProgramChange(HandleProgramChange);
-  // MIDI.setHandleSystemExclusive(HandleSystemExclusive);
+   MIDI.setHandleSystemExclusive(HandleSystemExclusive);
   MIDI.setHandleSongSelect(HandleSongSelect);
 
   MIDI.setHandleClock(HandleClock);
@@ -309,40 +369,27 @@ void indicateMidiChannel(unsigned char _channel){
     hw.update();
     delay(150);
   }
-
+  hw.setLed(_channel-1-highChannel*9,false);
+  hw.update();
 }
 
+#define BASTL_BYTE 0x7D
+#define CHANNEL_BYTE 0x00
+#define INSTRUMENT_BYTE 0X01 // poly 1.0
+#define TEST_BYTE 0x0A
+#define NUMBER_OF_MESSAGE_BYTES 2
 
+//unsigned char sysExArray[NUMBER_OF_SYSEX_BYTES];
+void HandleSystemExclusive(byte *array, byte size){
 
+  if(array[1]==BASTL_BYTE){ 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    if(array[2]==CHANNEL_BYTE){
+      inputChannel=array[2]; 
+      array[2]++;
+      MIDI.sendSysEx(size,array);
+    }
+   
+    else if(array[2]==TEST_BYTE) test=true, MIDI.turnThruOff(), MIDI.sendSysEx(NUMBER_OF_MESSAGE_BYTES,array,false);
+  }
+}

@@ -1,4 +1,4 @@
- // libraries
+// libraries
 #include <MIDI.h>
 #include <EEPROM.h>
 #include <avr/pgmspace.h>
@@ -27,7 +27,7 @@
 unsigned char inputChannel;
 
 const char* WAVE_TABLES[]={
-  SIN2048_DATA, SAW2048_DATA, TRIANGLE2048_DATA};//SQUARE_NO_ALIAS512_DATA};//HAT_DATA};//WHITENOISE2048_DATA};
+  SIN2048_DATA, SAW2048_DATA, TRIANGLE2048_DATA, TRIANGLE2048_DATA};//SQUARE_NO_ALIAS512_DATA};//HAT_DATA};//WHITENOISE2048_DATA};
 
 #define NUMBER_OF_WAVETABLES 4
 
@@ -50,40 +50,49 @@ lfo LFO;
 
 trinityHW hw; // MOZZI or DEFAULT
 sequencer seq(61); // set timeBase
+unsigned char sound,lastSound;
+
 
 void setup() {
-  
-  
+
+
   // debug();
   hw.setFreezeType(UNFREEZE_EXTERNALY);
   hw.initialize(DEFAULT);
-  //Serial.begin(9600);
-  //clearMemmory();
-  //for(int i=0;i<1024;i++) EEPROM.write(i,0);
+  
   animation();
   initMem();
-  
-  // setAllTables();
+
   initMidi(getMidiChannel());
   startMozzi(CONTROL_RATE);
   hw.update();
   hw.update();
   LFO.reset();
   seq.setNumberOfSteps(0);
-  setAllValues(0);
- // checkForPokemon();
+ 
+  hw.resetSwitches();
+  sound=hw.soundFromSwitches();     
+  setAllValues(sound);
+  
+  // checkForPokemon();
 
 }
 
 
 
 void updateControl(){
-
+  
+  MIDI.read();
+  MIDI.read();
+  MIDI.read();
   while(MIDI.read(inputChannel)) MIDI.read(inputChannel);
   hw.update();
   while(MIDI.read(inputChannel)) MIDI.read(inputChannel);
   UI();
   while(MIDI.read(inputChannel)) MIDI.read(inputChannel);
+  MIDI.read();
+  MIDI.read();
+  MIDI.read();
 
 
 }
@@ -91,3 +100,4 @@ void updateControl(){
 void loop() {
   audioHook();
 }
+
